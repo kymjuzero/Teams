@@ -1,0 +1,508 @@
+
+
+const int PLAYER_INVALID_ID = -1;
+
+const int MAX_PLAYERS = 5;
+const int TEAM_INVALID_ID = -1;
+
+// Reasons for failures
+const int FAIL_INSUFFICIENT_FUNDS = -1;
+const int FAIL_ROSTER_FULL = -2;
+
+struct player {
+  int player_id;    // assume it is unique across all player and is >= 0
+  int value;        // >= 0
+};
+
+const struct player player_empty = {PLAYER_INVALID_ID, 0};
+
+// player_setup(p, id, val) sets up player p with the given id and value (val)
+// effects: p is modified
+// requires: p is a valid player pointer
+//           id >= 0
+//           value >= 0
+void player_setup(struct player* const p, const int id, const int val) {
+  assert(p);
+  assert(id >= 0);
+  assert(val >= 0);
+  p->player_id = id;
+  p->value = val;
+}
+
+// player_print(p) prints the ID and value of player p
+// effects: prints output
+// requires: p is a valid player pointer
+void player_print(const struct player* const p) {
+  printf("#%d ($%d) ", p->player_id, p->value);
+}
+
+// Used to provide more information when some function calls fail
+struct reason {
+  int code;        // Success or failure (from above)
+  int team_num;    // Which team had the problem
+};
+
+struct team {
+  int team_id;
+  int cash_available;         // how much money does the team have available
+  int num_players;            // NEW: how many players are actually on the team
+  struct player players[5];   // NEW: MUST BE = MAX_PLAYERS
+};
+
+const struct team team_empty = {TEAM_INVALID_ID, 0}; // Doesn't set players to empty_player
+                                                     // Must be done by team_init_empty
+
+
+// print_reason(r) prints information about the reason for a failure
+//    as indicated in the structure r.
+// requires: r is a valid pointer to a reason
+//           The reason code is either FAIL_INSUFFICIENT_FUNDS or FAIL_ROSTER_FULL
+// effects: produces output
+
+void print_reason(const struct reason* const r) {
+  assert(r);
+  assert(r->code == FAIL_INSUFFICIENT_FUNDS || r->code == FAIL_ROSTER_FULL);
+  if (r->code == FAIL_INSUFFICIENT_FUNDS) {
+    printf("Team %d doesn't have enough money\n", r->team_num);
+  } else if (r->code == FAIL_ROSTER_FULL) {
+    printf("Team %d has a full roster\n", r->team_num);
+  }
+}
+
+// END OF DO NOT CHANGE REGION
+
+//  ************************************************************************************
+//  NOTES: Assume that all player ids are unique (you don't have to check for that).
+//         Assume that all team ids are unique (you don't have to check).
+//         A team must be initialized (using team_init_empty) before
+//           being used in any other calls (you don't have to check for this).
+//         Assume a team will only be "initialized" or "created" using team_setup once
+//           (you do not have to check for this).
+//  ************************************************************************************
+
+// team_player_value(t) returns the sum of the value of all of the players
+//     on team t
+// requires: t is a valid pointer to a team with a valid team_id
+int team_player_value(const struct team* t) {
+  assert(t);
+  int sum = 0;
+  for (int i = 0; i < t->num_players; ++i) {
+    sum += t->players[i].value;
+  }
+  return sum;
+}
+
+// team_value(t) returns the total value of the team t
+//     (i.e., the sum of the value of all of the players and the cash_available)
+// requires: t is a valid pointer to a team with a valid team_id
+int team_value(const struct team* const t) {
+  assert(t);
+  return team_player_value(t) + t->cash_available; 
+}
+
+// team_cash(t) returns the cash available for team t
+// requires: t is a valid pointer to a team with a valid team_id
+int team_cash(const struct team* const t) {
+  assert(t);
+  return t->cash_available;
+}
+
+// team_init_empty(t)
+//     Initialize team t to empty.
+//       Team id should be set to TEAM_INVALID_ID and other fields
+//       besides player structures should be zero.
+//     All players must be initialized to player_empty.
+// requires: t is a valid pointer to a team
+// effects: modifies team t
+void team_init_empty(struct team* const t) {
+  assert(t);
+  t->team_id = TEAM_INVALID_ID;
+  t->cash_available = 0;
+  t->num_players = 0;
+  for (int i = 0; i < t->num_players; ++i) {
+    t->players[i] = player_empty;
+  }
+}
+
+// team_setup(t, id, cash)
+//     Setup (create) team t by assigning it a team id = id
+//       and the initial amount of cash_available.
+// requires: t is a valid pointer to a team with a team_id = TEAM_INVALID_ID
+//           no players have been assigned to the team
+//           (i.e., player_id = PLAYER_INVALID_ID)
+//           for all players on the team
+//           id and cash >= 0
+//           num_players = 0
+// effects: modifies team t
+void team_setup(struct team* const t, int id, int cash) {
+  assert(t);
+  assert(id >= 0);
+  assert(cash >= 0);
+  assert(t->team_id == TEAM_INVALID_ID);
+  assert(t->num_players == 0); 
+  t->team_id = id;
+  t->cash_available = cash;
+}
+
+// team_get_id(t) returns the id that was assigned to team t
+// requires: t is a valid pointer to a team
+int team_get_id(const struct team* const t) {
+  assert(t);
+  return t->team_id;
+}
+
+// team_is_player_on(t, id) returns true if the team has a player
+//     with player id = id on the team.
+//     Otherwise returns false.
+// requires: t is a valid pointer to a team with a valid team_id
+//     id >= 0
+bool team_is_player_on(const struct team* const t, int id){
+  assert(t);
+  assert(id >= 0);
+  for (int i = 0; i < t->num_players; ++i) {
+    if (t->players[i].player_id == id) {
+      return true;
+    } 
+  }
+  return false;
+}
+
+// team_add_player(t, id, val, r)
+//     Attempt to add player with id and value (val) to team t
+//     First, if the team has reached the maximum number of players the call
+//        fails (and the reason is provided).
+//     Second if the team does not have
+//        enough cash available to pay for the value of the player,
+//        the call fails (and the reason is provided).
+//     On a failure, information about the failure is provided in reason r
+//        before the call returns false.
+//     If the player can be added the amount of cash available for the team
+//        is decreased by the value (val) of the player
+//        (i.e., they have to pay for the player).
+//     If successful, the call returns true and the reason should be ignored.
+// requires: t is a valid pointer to a team with a valid team_id
+//     id and val >= 0
+//     player with identity id is not already on the team
+//     Reason r is a valid pointer.
+// effects: may modify team t and reason r
+bool team_add_player(struct team* const t, int id, int val,
+     struct reason *r) {
+       assert(t);
+       assert(id >= 0);
+       assert(val >= 0);
+       assert(r);
+       if (t->num_players >= MAX_PLAYERS) {
+         r->code = FAIL_ROSTER_FULL;
+         r->team_num = t->team_id;
+         return false;
+       } if (val > t->cash_available) {
+         r->code = FAIL_INSUFFICIENT_FUNDS;
+         r->team_num = t->team_id;
+         return false;
+       } else {
+         t->cash_available -= val;
+        ++t->num_players;
+        t->players[t->num_players - 1].player_id = id;
+        t->players[t->num_players - 1].value = val;
+         return true;
+       }
+}
+
+
+// team_sell_player(t1, id, t2, r)
+//     Team t1 attempts to sell the specified player (id) to team t2
+//     First, if team t2 has reached the maximum number of players, the call
+//        fails (and the reason is provided).
+//     Second if the team t2 does not have
+//        enough cash available to pay for the value of the player,
+//        the call fails (and the reason is provided).
+//     On a failure, information about the failure is provided in reason r
+//        before the call returns false.
+//     If successful, the call returns true and the reason should be ignored.
+// requires: t1 and t2 are valid pointer to a team both with a valid team_id
+//     The specified player (id) is on team t1.
+//     The specified player (id) is not on team t2.
+//     Reason r is a valid pointer.
+//     id >= 0.
+//     t1 != t2
+// effects: may modify team t1 and t2 and reason r
+bool team_sell_player(struct team* const t1, int id,
+     struct team* const t2, struct reason* const r) {
+        assert(t1);
+        assert(t2);
+        assert(r);
+        assert(id >= 0);
+       if (t2->num_players >= MAX_PLAYERS) {
+         r->code = FAIL_ROSTER_FULL;
+         r->team_num = t2->team_id;
+         return false;
+       } for (int i = 0; i < t1->num_players; ++i) {
+         if (t1->players[i].player_id == id) {
+           if (t2->cash_available < t1->players[i].value) {
+           r->code = FAIL_INSUFFICIENT_FUNDS;
+           r->team_num = t2->team_id;
+           return false;
+         } t1->cash_available += t1->players[i].value;
+           t2->cash_available -= t1->players[i].value;
+           t2->players[t2->num_players] = t1->players[i];
+           t2->num_players++;
+           for (int j = i; j < t1->num_players - 1; ++j) {
+             t1->players[j] = t1->players[j + 1];
+           } t1->num_players--;
+           return true;
+         }
+       } return false;
+     }
+
+// team_trade_players(t) team t1 attempts to trade player with id1 to team t2
+//     in exchange for the player with id2 on team t2
+//     If team t1 or t2 do not have enough cash available to cover the difference
+//        in value between the two players, the call fails.
+//     On a failure, information about the failure is provided in reason r
+//        before the call returns false.
+//     If successful, the call returns true and the reason should be ignored.
+// requires: t1 and t2 are valid pointer to a team both with a valid team_id
+//     The specified player (id1) is on team t1.
+//     The specified player (id2) is on team t2.
+//     Reason r is a valid pointer.
+//     id1 and id2 >= 0
+//     t1 != t2
+// effects: may modify team t1 and t2 and reason r
+bool team_trade_players(struct team* const t1, int id1,
+     struct team* const t2, int id2, struct reason* const r) {
+       assert(t1);
+       assert(t2);
+       assert(r);
+       assert(id1 >= 0);
+       assert(id2 >= 0);
+       int val1 = 0;
+       int val2 = 0;
+       int ind1 = 0;
+       int ind2 = 0;
+       for (int i = 0; i < t1->num_players; ++i) {
+         if (t1->players[i].player_id == id1) {
+           val1 = t1->players[i].value;
+           ind1 = i;
+           break;
+         }
+       } for (int i = 0; i < t2->num_players; ++i) {
+         if (t2->players[i].player_id == id2) {
+           val2 = t2->players[i].value;
+           ind2 = i;
+           break;
+         }
+       } int diff = val1 - val2;
+       if (t2->cash_available < diff) {
+         r->code = FAIL_INSUFFICIENT_FUNDS;
+         r->team_num = t2->team_id;
+         return false;
+       } if (t1->cash_available < diff) {
+         r->code = FAIL_INSUFFICIENT_FUNDS;
+         r->team_num = t1->team_id;
+         return false;
+       } if (diff > 0) {
+         t2->cash_available -= diff;
+         t1->cash_available += diff;
+       } else if (diff < 0) {
+         t1->cash_available += diff;
+         t2->cash_available -= diff;
+       } struct player temp = t1->players[ind1];
+       t1->players[ind1] = t2->players[ind2];
+       t2->players[ind2] = temp;
+       return true;
+}
+
+
+// swap(px, py) "swaps" the contents of *px and *py
+// effects: modifies *px and *py
+// requires: px and py are valid pointers
+void swap(struct player* p1, struct player* p2) {
+  assert(p1);
+  assert(p2);
+  struct player temp = *p1;
+  *p1 = *p2;
+  *p2 = temp;
+}
+
+// team_print(t) prints information about team t
+//    NOTE: must print players from lowest player_id to highest player_id
+// requires: t is a valid pointer to a team with a valid team_id 
+// effects: prints output
+void team_print(const struct team* const t) {
+  assert(t);
+  assert(t->team_id != TEAM_INVALID_ID);
+  printf("Team %d : ", team_get_id(t));
+  struct player temp[5] = {player_empty, player_empty, player_empty, 
+  player_empty, player_empty};
+
+  // INSERT CODE HERE FOR PRINTING PLAYERS
+  // Players must be printed from the lowest player_id to highest player_id.
+  // You must NOT print players with player_id == PLAYER_INVALID_ID
+  // The function you use to print the player is
+  //    player_print(player_ptr);  see above
+  // player_print will take care of proper spacing.
+    for (int i = 0; i < t->num_players; ++i) {
+      temp[i] = t->players[i];
+    }
+    for (int i = 0; i < t->num_players; ++i) {
+      int pos = i; 
+      for (int j = i + 1; j < t->num_players; ++j) {
+      if (t->players[j].player_id < t->players[i].player_id) {
+        pos = j;
+      }
+    }
+    swap(&temp[i], &temp[pos]);  // see Section 04
+  } for (int i = 0; i < t->num_players; ++i) {
+    player_print(&temp[i]);
+    }
+
+  printf("player value = %d cash = %d", team_player_value(t), team_cash(t));
+  printf("\n");
+}
+
+// Testing harness allows tests with up to 4 different teams
+const int MAX_TEAMS = 4;
+
+// Helpers used to find the right team / slot in the array of teams
+
+// team_get_by_num(teams, team_num) returns a pointer to the team in teams with ID == team_num
+//   or NULL if there is no such team
+// requires: teams is an array of MAX_TEAMS teams
+struct team *team_get_by_num(struct team teams[], int team_num) {
+  assert(teams);
+  for (int i=0; i<MAX_TEAMS; i++) {
+    if (teams[i].team_id == team_num) {
+      return &teams[i];
+    }
+  }
+  return NULL;
+}
+
+// team_find_empty(teams) returns a pointer to the FIRST invalid team in teams
+//  if all teams are valid, returns NULL
+// requires: teams is an array of MAX_TEAMS teams
+struct team *team_find_empty(struct team teams[]) {
+  assert(teams);
+  for (int i=0; i<MAX_TEAMS; i++) {
+    if (teams[i].team_id == TEAM_INVALID_ID) {
+      return &teams[i];
+    }
+  }
+  return NULL;
+}
+
+
+int main(void) {
+  // Pointer to teams to make code a bit simpler.
+  struct team *t = 0;
+  struct team *t1 = 0;
+  struct team *t2 = 0;
+  // Reason a call failured (if there is a failure)
+  struct reason r = {0};
+
+  int cmd = 0;
+  int team_num = 0;
+  int team_num1 = 0;
+  int team_num2 = 0;
+  int player_id1 = 0;
+  int player_id2 = 0;
+  int amount = 0;
+  int value = 0;
+  bool retval = false;
+
+  struct team teams[4] = {0};
+
+  for (int i=0; i<MAX_TEAMS; i++) {
+     team_init_empty(&teams[i]);
+  }
+
+  while (1) {
+    cmd = read_symbol();
+
+    if (cmd == lookup_symbol("team")) {
+      assert(scanf("%d", &team_num) == 1);
+      assert(scanf("%d", &amount) == 1);
+
+      assert(team_get_by_num(teams, team_num) == NULL);
+
+      t = team_find_empty(teams);
+      if (t == NULL) {
+        printf("Teams are all initialized\n");
+      } else {
+        team_setup(t, team_num, amount);
+      }
+    } else if (cmd == lookup_symbol("add_player")) {
+      assert(scanf("%d", &team_num1) == 1);
+      assert(scanf("%d", &player_id1) == 1);
+      assert(scanf("%d", &value) == 1);
+
+      t1 = team_get_by_num(teams, team_num1);
+      assert(t1);
+
+      retval = team_add_player(t1, player_id1, value, &r);
+      if (retval == false) {
+        printf("add_player failed : ");
+        print_reason(&r);
+      }
+
+    } else if (cmd == lookup_symbol("is_on")) {
+      assert(scanf("%d", &team_num1) == 1);
+      assert(scanf("%d", &player_id1) == 1);
+
+      t1 = team_get_by_num(teams, team_num1);
+      assert(t1);
+
+      retval = team_is_player_on(t1, player_id1);
+      if (retval == true) {
+         printf("Player %d is on team %d\n", player_id1, team_num1);
+      } else {
+         printf("Player %d is not on team %d\n", player_id1, team_num1);
+      }
+
+    } else if (cmd == lookup_symbol("print")) {
+      assert(scanf("%d", &team_num1) == 1);
+
+      t1 = team_get_by_num(teams, team_num1);
+      assert(t1);
+      team_print(t1);
+
+    } else if (cmd == lookup_symbol("sell_player")) {
+      assert(scanf("%d", &team_num1) == 1);
+      assert(scanf("%d", &player_id1) == 1);
+      assert(scanf("%d", &team_num2) == 1);
+
+      t1 = team_get_by_num(teams, team_num1);
+      assert(t1);
+
+      t2 = team_get_by_num(teams, team_num2);
+      assert(t2);
+
+      retval = team_sell_player(t1, player_id1, t2, &r);
+      if (retval == false) {
+        printf("sell_player failed : ");
+        print_reason(&r);
+      }
+
+    } else if (cmd == lookup_symbol("trade_players")) {
+      assert(scanf("%d", &team_num1) == 1);
+      assert(scanf("%d", &player_id1) == 1);
+      assert(scanf("%d", &team_num2) == 1);
+      assert(scanf("%d", &player_id2) == 1);
+
+      t1 = team_get_by_num(teams, team_num1);
+      assert(t1);
+      t2 = team_get_by_num(teams, team_num2);
+      assert(t1);
+
+      retval = team_trade_players(t1, player_id1, t2, player_id2, &r);
+      if (retval == false) {
+        printf("trade_players failed : ");
+        print_reason(&r);
+      }
+
+    } else {
+      
+      return 0;
+    }
+  }
+}
